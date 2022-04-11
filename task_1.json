@@ -1,0 +1,129 @@
+{
+  "AWSTemplateFormatVersion":"2010-09-09",
+
+  "Parameters":{
+    "KeyName": {
+      "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Default": "kterletskyi-aws-course-key",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+    },
+    "InstanceType" : {
+      "Description" : "WebServer EC2 instance type",
+      "Type" : "String",
+      "Default" : "t2.micro",
+      "AllowedValues" : ["t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+    "Subnets" : {
+      "Type" : "CommaDelimitedList",
+      "Description" : "The list of SubnetIds in your Virtual Private Cloud (VPC)",
+      "Default" : "subnet-08f7a7c8de5b9ce1b,subnet-0cc95794d06f23678",
+      "ConstraintDescription" : "must be a list of at least two existing subnets associated with at least two different availability zones."
+    },
+  },
+
+  "Resources":{
+    "launchTemplateTaskWeek1":{
+      "Type":"AWS::EC2::LaunchTemplate",
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "configSets":{
+              "Install":[
+                  "Install"
+              ]
+          },
+          "Install" : {
+            "packages" : {
+              "yum" : {
+                "java-1.8.0-openjdk-devel" : []
+              }
+            }
+          }
+        }
+      },
+      "Properties":{
+        "LaunchTemplateName": "templateTaskJava",
+        "LaunchTemplateData": {
+          "ImageId": "ami-00ee4df451840fa9d",
+          "KeyName" : { "Ref" : "KeyName" },
+          "InstanceType": {
+            "Ref": "InstanceType"
+          },
+          "UserData": {
+              "Fn::Base64": {
+                  "Fn::Join": [
+                      "",
+                      [
+                          "#!/bin/bash -xe\n",
+                          "yum install -y aws-cfn-bootstrap\n",
+                          "# Install the files and packages from the metadata\n",
+                          "/opt/aws/bin/cfn-init -v ",
+                          "         --stack ",
+                          {
+                              "Ref":"AWS::StackName"
+                          },
+                          "         --resource launchTemplateTaskWeek1 ",
+                          "         --configsets Install ",
+                          "         --region ",
+                          {
+                              "Ref":"AWS::Region"
+                          },
+                          "\n"
+                      ]
+                  ]
+              }
+          },
+          "SecurityGroupIds": [
+            { "Fn::GetAtt" : ["SSHSecurityGroup", "GroupId"] },
+            { "Fn::GetAtt" : ["HTTPSecurityGroup", "GroupId"] }
+          ]
+        }
+      }
+    },
+    "myASG": {
+      "Type":"AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "VPCZoneIdentifier" : { "Ref" : "Subnets" },
+        "MinSize":"2",
+        "MaxSize":"3",
+        "DesiredCapacity":"2",
+        "LaunchTemplate": {
+          "LaunchTemplateId": {
+            "Ref":"launchTemplateTaskWeek1"
+          },
+          "Version" : {
+            "Fn::GetAtt" : [
+              "launchTemplateTaskWeek1",
+              "LatestVersionNumber"
+            ]
+          }
+        }
+      }
+    },
+    "SSHSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable SSH access via port 22",
+        "SecurityGroupIngress" : [ {
+          "IpProtocol" : "tcp",
+          "FromPort" : 22,
+          "ToPort" : 22,
+          "CidrIp" : "0.0.0.0/0"
+        } ]
+      }
+    },
+    "HTTPSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Allow http to client host",
+        "SecurityGroupIngress" : [{
+          "IpProtocol" : "tcp",
+            "FromPort" : 80,
+            "ToPort" : 80,
+            "CidrIp" : "0.0.0.0/0"
+        }]
+      }
+    }
+  }
+}

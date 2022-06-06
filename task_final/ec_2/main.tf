@@ -21,11 +21,15 @@ resource "aws_instance" "ec2_private_instance" {
     sudo su
     export RDS_HOST=${var.rds_hostname}
     yum update -y
+    echo 'JAVA 8 installing ...'
     yum install java-1.8.0-openjdk -y
+    java -version
 
     aws s3 cp s3://${var.s3_bucket_name}/persist3-2021-0.0.1-SNAPSHOT.jar /home/
 
+    echo 'Installing PostgreSQL client'
     amazon-linux-extras install postgresql10 -y
+    export PGPASSWORD='rootuser';psql -h ${var.rds_hostname} -U 'rootuser' -d template1 -c 'CREATE DATABASE "EduLohikaTrainingAwsRds";'
     java -jar /home/persist3-2021-0.0.1-SNAPSHOT.jar
   EOF
 
